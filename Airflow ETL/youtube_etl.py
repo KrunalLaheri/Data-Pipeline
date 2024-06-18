@@ -5,19 +5,29 @@ from googleapiclient.discovery import build
 from datetime import datetime
 import boto3
 from botocore.exceptions import NoCredentialsError, PartialCredentialsError
-
+import os
+from dotenv import load_dotenv
+load_dotenv()
 # AWS Kinesis configuration
 KINESIS_STREAM_NAME = 'YoutubeCommentStream'
 
 # AWS credentials
-ACCESS_KEY = 'ACCESS_KEY'
-SECRET_KEY = 'SECRET_KEY'
-REGION_NAME = 'REGION_NAME'
+ACCESS_KEY = os.getenv('ACCESS_KEY')
+SECRET_KEY = os.getenv('SECRET_KEY')
+REGION_NAME = os.getenv('REGION_NAME')
 
 
 # YouTube API configuration
-API_KEY = 'API_KEY'
-LIVE_VIDEO_ID = 'LIVE_VIDEO_ID'
+API_KEY = os.getenv('API_KEY')
+LIVE_VIDEO_ID = os.getenv('LIVE_VIDEO_ID')
+
+
+print("================================================>ACCESS_KEY",ACCESS_KEY)
+print("================================================>SECRET_KEY",SECRET_KEY)
+print("================================================>REGION_NAME",REGION_NAME)
+print("================================================>API_KEY",API_KEY)
+print("================================================>LIVE_VIDEO_ID",LIVE_VIDEO_ID)
+
 
 def put_records_to_kinesis(data, stream_name, partition_key, access_key, secret_key, region_name):
     kinesis_client = boto3.client(
