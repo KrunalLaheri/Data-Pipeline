@@ -1,58 +1,45 @@
+import io
 import time
-import json
 import pandas as pd
 from googleapiclient.discovery import build
 from datetime import datetime
 import boto3
 from botocore.exceptions import NoCredentialsError, PartialCredentialsError
 
-# AWS Kinesis configuration
-KINESIS_STREAM_NAME = 'YoutubeCommentStream'
+# S3 bucket configuration
+S3_BUCKET_NAME = 'krunal-laheri'
+S3_FOLDER_PATH = 'Youtube Video Analysis Row Data/'
 
 # AWS credentials
-ACCESS_KEY = 'ACCESS_KEY'
+ACCESS_KEY = 'ACCESS_KEY_ID'
 SECRET_KEY = 'SECRET_KEY'
 REGION_NAME = 'REGION_NAME'
-
 
 # YouTube API configuration
 API_KEY = 'API_KEY'
 LIVE_VIDEO_ID = 'LIVE_VIDEO_ID'
 
-def put_records_to_kinesis(data, stream_name, partition_key, access_key, secret_key, region_name):
-    kinesis_client = boto3.client(
-        'kinesis',
+
+def upload_to_s3(dataframe, bucket, folder_path, access_key, secret_key, region_name, object_name):
+    s3_client = boto3.client(
+        's3',
         aws_access_key_id=access_key,
         aws_secret_access_key=secret_key,
         region_name=region_name
     )
 
     try:
-        response = kinesis_client.put_records(
-            Records=[
-                {
-                    'Data': json.dumps(record),
-                    'PartitionKey': partition_key
-                } for record in data
-            ],
-            StreamName=stream_name
-        )
-        # response = kinesis_client.put_records(
-        #     Records=[
-        #         {
-        #             'Data': "krunal",
-        #             'PartitionKey': partition_key
-        #         } for record in data
-        #     ],
-        #     StreamName=stream_name
-        # )
-        print(f"Successfully put {len(data)} records to Kinesis stream {stream_name}")
+        csv_buffer = io.StringIO()
+        dataframe.to_csv(csv_buffer, index=False)
+        s3_object_name = folder_path + object_name
+        s3_client.put_object(Bucket=bucket, Key=s3_object_name, Body=csv_buffer.getvalue())
+        print(f"Successfully uploaded {object_name} to s3://{bucket}/{s3_object_name}")
     except NoCredentialsError:
         print("Credentials not available")
     except PartialCredentialsError:
         print("Incomplete credentials provided")
     except Exception as e:
-        print(f"Error putting records to Kinesis: {e}")
+        print(f"Error uploading file: {e}")
         return False
     return True
 
@@ -130,24 +117,29 @@ def run_youtube_etl():
         
         next_page_token = response.get('nextPageToken')
 
-        # Stream comments to Kinesis
+        # Upload comments to S3
         if len(comments_list) >= 20:
-            put_records_to_kinesis(comments_list, KINESIS_STREAM_NAME, 'comment', ACCESS_KEY, SECRET_KEY, REGION_NAME)
+            comments_df = pd.DataFrame(comments_list)
+            file_name = 'youtube_comments_' + datetime.now().strftime("%d-%m-%Y-%H-%M-%S") + '.csv'
+            upload_to_s3(comments_df, S3_BUCKET_NAME, S3_FOLDER_PATH, ACCESS_KEY, SECRET_KEY, REGION_NAME, file_name)
             comments_list = []
         
-        # Stream channel details to Kinesis
+        # Upload channel details to S3
         if len(channel_details_list) >= 20:
-            put_records_to_kinesis(channel_details_list, KINESIS_STREAM_NAME, 'channel', ACCESS_KEY, SECRET_KEY, REGION_NAME)
+            channel_details_df = pd.DataFrame(channel_details_list)
+            file_name = 'youtube_channel_details_' + datetime.now().strftime("%d-%m-%Y-%H-%M-%S") + '.csv'
+            upload_to_s3(channel_details_df, S3_BUCKET_NAME, S3_FOLDER_PATH, ACCESS_KEY, SECRET_KEY, REGION_NAME, file_name)
             channel_details_list = []
 
-        # Stream video details to Kinesis at regular intervals
+        # Upload video details to S3 at regular intervals
         video_info = get_live_video_details(youtube, LIVE_VIDEO_ID)
         video_info_list.append(video_info)
         if len(video_info_list) >= 10:
-            put_records_to_kinesis(video_info_list, KINESIS_STREAM_NAME, 'video', ACCESS_KEY, SECRET_KEY, REGION_NAME)
+            video_details_df = pd.DataFrame(video_info_list)
+            file_name = 'youtube_video_details_' + datetime.now().strftime("%d-%m-%Y-%H-%M-%S") + '.csv'
+            upload_to_s3(video_details_df, S3_BUCKET_NAME, S3_FOLDER_PATH, ACCESS_KEY, SECRET_KEY, REGION_NAME, file_name)
             video_info_list = []
 
         time.sleep(5)
 
-# Uncomment to run the ETL process
 # run_youtube_etl()
